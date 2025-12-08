@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Trainer Blindfold V4</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #222;
+            color: #eee;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        /* --- CONTROLES DU HAUT --- */
+        #top-bar {
+            background: #333;
+            width: 100%;
+            padding: 15px 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        .row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button.btn-mode {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            background-color: #555;
+            color: #ccc;
+        }
+        button.btn-mode.active {
+            background-color: #3498db;
+            color: white;
+            box-shadow: 0 0 10px #3498db;
+        }
+
+        input[type="text"] {
+            background: #444;
+            border: 1px solid #666;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            text-align: center;
+            font-family: monospace;
+        }
+        
+        #config-groupes { width: 300px; text-align: left; }
+        #filtre { width: 40px; border-color: #e74c3c; }
+
+        /* --- ZONE METRONOME --- */
+        .metronome-area {
+            background: rgba(0,0,0,0.2);
+            padding: 5px 15px;
+            border-radius: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            font-size: 14px;
+        }
+        input[type="range"] { accent-color: #2ecc71; cursor: pointer;}
+
+        /* --- ZONE CENTRALE --- */
+        #zone-centrale {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            cursor: pointer;
+        }
+
+        #affichage {
+            font-size: 250px;
+            font-weight: 800;
+            text-shadow: 0 0 20px rgba(255,255,255,0.1);
+            user-select: none;
+            line-height: 1;
+        }
+
+        #infos { color: #777; margin-top: 10px; font-size: 16px; }
+
+        /* --- HISTORIQUE --- */
+        #historique-container {
+            height: 60px;
+            width: 100%;
+            background: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            border-top: 1px solid #333;
+            color: #555;
+            font-family: monospace;
+            font-size: 20px;
+        }
+        .hist-item { animation: fadeIn 0.3s ease; }
+        .hist-item:first-child { color: #888; font-weight: bold; } /* Le plus récent */
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+    <div id="top-bar">
+        <div class="row">
+            <button id="btn-arretes" class="btn-mode active" onclick="changerMode('arretes')">ARRÊTES</button>
+            <button id="btn-coins" class="btn-mode" onclick="changerMode('coins')">COINS</button>
+            <input type="text" id="config-groupes" placeholder="Groupes..." oninput="sauvegarderEtMettreAJour()">
+            <input type="text" id="filtre" maxlength="1" placeholder="-" oninput="sauvegarderEtMettreAJour()" title="Lettre imposée">
+        </div>
+
+        <div class="row">
+            <div class="metronome-area">
+                <input type="checkbox" id="auto-mode" onchange="toggleAuto()">
+                <label for="auto-mode">Mode Auto</label>
+                <input type="range" id="speed" min="500" max="5000" step="100" value="2000" oninput="updateSpeedLabel()">
+                <span id="speed-label">2.0s</span>
+            </div>
+            <div id="debug" style="font-size: 12px; color: #555;">0 paires</div>
+        </div>
+    </div>
+
+    <div id="zone-centrale" onclick="document.body.focus()">
+        <div id="affichage">GO</div>
+        <div id="infos">Espace pour générer</div>
+    </div>
+
+    <div id="historique-container">
+        <span style="font-size: 14px;">Historique vide</span>
+    </div>
+
+    <script>
+        // --- DONNEES ---
+        let data = {
+            arretes: "AB CD EF GH IJ KL MN OP QR ST UV",
+            coins:   "ABC DEF GHI JKL MNO PQR STU"
+        };
+        let modeActuel = 'arretes';
+        let poolDePaires = [];
+        let historique = [];
+        let intervalId = null; // Pour le métronome
+
+        // --- INIT ---
+        window.onload = function() {
+            chargerInputs();
+            calculerPool();
+        };
+
+        // --- LOGIQUE PRINCIPALE ---
+        function genererNouvellePaire() {
+            if (poolDePaires.length === 0) {
+                document.getElementById("affichage").innerText = "!";
+                return;
+            }
+            
+            const random = Math.floor(Math.random() * poolDePaires.length);
+            const resultat = poolDePaires[random];
+            
+            // Mise à jour Affichage
+            document.getElementById("affichage").innerText = resultat;
+            document.getElementById("infos").innerText = ""; 
+
+            // Mise à jour Historique
+            historique.unshift(resultat); // Ajoute au début
+            if (historique.length > 10) historique.pop(); // Garde max 10
+            afficherHistorique();
+        }
+
+        function afficherHistorique() {
+            const container = document.getElementById("historique-container");
+            container.innerHTML = "";
+            historique.forEach(paire => {
+                const span = document.createElement("span");
+                span.className = "hist-item";
+                span.innerText = paire;
+                container.appendChild(span);
+            });
+        }
+
+        // --- GESTION CONFIGURATION ---
+        function changerMode(mode) {
+            modeActuel = mode;
+            historique = []; // Reset historique quand on change de mode
+            afficherHistorique();
+            
+            // UI Update
+            document.getElementById('btn-arretes').className = mode === 'arretes' ? 'btn-mode active' : 'btn-mode';
+            document.getElementById('btn-coins').className = mode === 'coins' ? 'btn-mode active' : 'btn-mode';
+            document.getElementById('affichage').innerText = mode === 'arretes' ? "Edge" : "Coin";
+            
+            chargerInputs();
+            calculerPool();
+        }
+
+        function chargerInputs() {
+            document.getElementById('config-groupes').value = data[modeActuel];
+        }
+
+        function sauvegarderEtMettreAJour() {
+            data[modeActuel] = document.getElementById('config-groupes').value.toUpperCase();
+            calculerPool();
+        }
+
+        function calculerPool() {
+            const rawText = data[modeActuel];
+            const filtre = document.getElementById('filtre').value.toUpperCase();
+            const groupes = rawText.split(" ").filter(x => x.length > 0);
+            const toutesLettres = groupes.join("").split("");
+            
+            let tempPool = [];
+
+            for (let i = 0; i < toutesLettres.length; i++) {
+                for (let j = 0; j < toutesLettres.length; j++) {
+                    let L1 = toutesLettres[i];
+                    let L2 = toutesLettres[j];
+
+                    if (L1 === L2) continue;
+                    
+                    let g1 = groupes.find(g => g.includes(L1));
+                    let g2 = groupes.find(g => g.includes(L2));
+                    if (g1 === g2) continue;
+
+                    if (filtre && (L1 !== filtre && L2 !== filtre)) continue;
+
+                    tempPool.push(L1 + L2);
+                }
+            }
+            poolDePaires = tempPool;
+            document.getElementById('debug').innerText = poolDePaires.length + " paires";
+        }
+
+        // --- GESTION METRONOME ---
+        function toggleAuto() {
+            const isAuto = document.getElementById('auto-mode').checked;
+            if (isAuto) {
+                lancerMetronome();
+                document.getElementById("infos").innerText = "Mode Automatique actif";
+            } else {
+                clearInterval(intervalId);
+                document.getElementById("infos").innerText = "Mode Manuel (Espace)";
+            }
+        }
+
+        function lancerMetronome() {
+            clearInterval(intervalId); // Stop l'ancien si existe
+            const ms = document.getElementById('speed').value;
+            intervalId = setInterval(genererNouvellePaire, ms);
+        }
+
+        function updateSpeedLabel() {
+            const ms = document.getElementById('speed').value;
+            document.getElementById('speed-label').innerText = (ms / 1000).toFixed(1) + "s";
+            // Si le mode auto est déjà actif, on met à jour la vitesse en direct
+            if (document.getElementById('auto-mode').checked) {
+                lancerMetronome();
+            }
+        }
+
+        // --- INPUT UTILISATEUR ---
+        document.body.onkeyup = function(e) {
+            if (document.activeElement.tagName === "INPUT") return;
+
+            if (e.code === "Space" || e.keyCode === 32) {
+                // Si on est en mode auto, Espace sert de Pause/Play
+                if (document.getElementById('auto-mode').checked) {
+                    document.getElementById('auto-mode').click(); 
+                } else {
+                    genererNouvellePaire();
+                }
+            }
+        };
+    </script>
+</body>
+</html>
