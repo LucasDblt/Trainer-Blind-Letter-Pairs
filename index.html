@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Trainer Blindfold V1.9 - Cycle</title>
+    <title>Trainer Blindfold V2.0 - AutoSave</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -197,7 +197,7 @@
 
                 <input type="checkbox" id="auto-mode" onchange="toggleAuto()">
                 <label for="auto-mode">Métronome</label>
-                <input type="range" id="speed" min="500" max="5000" step="100" value="2000" oninput="updateSpeedLabel()">
+                <input type="range" id="speed" min="500" max="5000" step="100" value="2000" oninput="saveAndSetSpeed()">
                 <span id="speed-label">2.0s</span>
             </div>
             <div id="debug" style="font-size: 12px; color: #555; font-family: monospace;">0 paires</div>
@@ -234,15 +234,25 @@
 
         // --- INIT ---
         window.onload = function() {
-            chargerInputs();
-            calculerPool();
+            // 1. Récupérer les sauvegardes locales (Groupes, Sheet, Vitesse)
+            if(localStorage.getItem("saved_arretes")) data.arretes = localStorage.getItem("saved_arretes");
+            if(localStorage.getItem("saved_coins")) data.coins = localStorage.getItem("saved_coins");
             
-            // Charge l'URL sauvegardée
             const savedUrl = localStorage.getItem("sheetUrl");
             if (savedUrl) {
                 document.getElementById("input-url-sheet").value = savedUrl;
                 chargerDictionnaireDepuisGoogle();
             }
+
+            const savedSpeed = localStorage.getItem("saved_speed");
+            if (savedSpeed) {
+                document.getElementById("speed").value = savedSpeed;
+                document.getElementById('speed-label').innerText = (savedSpeed / 1000).toFixed(1) + "s";
+            }
+
+            // 2. Lancer
+            chargerInputs();
+            calculerPool();
         };
 
         // --- GESTION GOOGLE SHEETS ---
@@ -337,22 +347,14 @@
             const cycleActif = document.getElementById("mode-cycle").checked;
 
             if (cycleActif) {
-                // --- MODE CYCLE ---
                 if (poolRestant.length === 0) {
                     poolRestant = [...poolDePaires];
                 }
-                
-                // Pioche aléatoire DANS LE RESTE
                 const randomIndex = Math.floor(Math.random() * poolRestant.length);
                 resultat = poolRestant[randomIndex];
-                
-                // On l'enlève de la liste
                 poolRestant.splice(randomIndex, 1);
-                
                 updateDebugCount();
-                
             } else {
-                // --- MODE HASARD TOTAL ---
                 const random = Math.floor(Math.random() * poolDePaires.length);
                 resultat = poolDePaires[random];
             }
@@ -414,7 +416,12 @@
         }
 
         function sauvegarderEtMettreAJour() {
+            // Mise à jour de la mémoire vive
             data[modeActuel] = document.getElementById('config-groupes').value.toUpperCase();
+            
+            // SAUVEGARDE PERSISTANTE (LocalStorage)
+            localStorage.setItem("saved_" + modeActuel, data[modeActuel]);
+            
             calculerPool();
         }
 
@@ -449,7 +456,6 @@
                 }
             }
             poolDePaires = tempPool;
-            // Quand on recalcule le pool global, on reset aussi le Cycle
             resetCycle(); 
         }
 
@@ -466,18 +472,20 @@
             }
         }
 
+        function saveAndSetSpeed() {
+            const ms = document.getElementById('speed').value;
+            localStorage.setItem("saved_speed", ms); // Sauvegarde vitesse
+            document.getElementById('speed-label').innerText = (ms / 1000).toFixed(1) + "s";
+            
+            if (document.getElementById('auto-mode').checked) {
+                lancerMetronome();
+            }
+        }
+
         function lancerMetronome() {
             clearInterval(intervalId);
             const ms = document.getElementById('speed').value;
             intervalId = setInterval(genererEtAfficherPaire, ms);
-        }
-
-        function updateSpeedLabel() {
-            const ms = document.getElementById('speed').value;
-            document.getElementById('speed-label').innerText = (ms / 1000).toFixed(1) + "s";
-            if (document.getElementById('auto-mode').checked) {
-                lancerMetronome();
-            }
         }
 
         // --- INPUT UTILISATEUR ---
