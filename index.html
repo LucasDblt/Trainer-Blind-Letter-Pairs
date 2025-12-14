@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Trainer Blindfold V8 - Google Sheets</title>
+    <title>Trainer Blindfold V1.9 - Cycle</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -65,7 +65,6 @@
             font-size: 13px;
         }
         
-        /* Champ URL Google Sheet */
         #input-url-sheet {
             width: 250px;
             text-align: left;
@@ -100,6 +99,8 @@
         
         input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: #f1c40f; }
         label { cursor: pointer; font-weight: bold; }
+        
+        .separator { border-left: 1px solid #666; height: 20px; margin: 0 2px; }
 
         /* --- ZONE CENTRALE --- */
         #zone-centrale {
@@ -184,17 +185,22 @@
 
         <div class="row">
             <div class="options-area">
+                <input type="checkbox" id="mode-cycle" onchange="resetCycle()" title="Passe chaque paire une fois avant de répéter"> 
+                <label for="mode-cycle" title="Mode Exhaustif">Cycle</label>
+
+                <span class="separator"></span>
+
                 <input type="checkbox" id="mode-verif" checked> 
                 <label for="mode-verif">Flashcard</label>
                 
-                <span style="border-left: 1px solid #666; height: 20px; margin: 0 5px;"></span>
+                <span class="separator"></span>
 
                 <input type="checkbox" id="auto-mode" onchange="toggleAuto()">
                 <label for="auto-mode">Métronome</label>
                 <input type="range" id="speed" min="500" max="5000" step="100" value="2000" oninput="updateSpeedLabel()">
                 <span id="speed-label">2.0s</span>
             </div>
-            <div id="debug" style="font-size: 12px; color: #555;">0 paires</div>
+            <div id="debug" style="font-size: 12px; color: #555; font-family: monospace;">0 paires</div>
         </div>
     </div>
 
@@ -210,14 +216,16 @@
 
     <script>
         // --- VARIABLES GLOBALES ---
-        let dictionnaireMots = {}; // Sera rempli par Google Sheet
+        let dictionnaireMots = {}; 
         
         let data = {
             arretes: "AB CD EF GH IJ KL MN OP QR ST UV",
             coins:   "ABC DEF GHI JKL MNO PQR STU"
         };
         let modeActuel = 'arretes';
-        let poolDePaires = [];
+        let poolDePaires = [];  // Liste complète possible
+        let poolRestant = [];   // Liste pour le mode cycle
+        
         let historique = [];
         let intervalId = null; 
         
@@ -229,7 +237,7 @@
             chargerInputs();
             calculerPool();
             
-            // Charge l'URL sauvegardée si elle existe
+            // Charge l'URL sauvegardée
             const savedUrl = localStorage.getItem("sheetUrl");
             if (savedUrl) {
                 document.getElementById("input-url-sheet").value = savedUrl;
@@ -248,7 +256,6 @@
                 return;
             }
 
-            // Sauvegarde l'URL
             localStorage.setItem("sheetUrl", url);
             statusSpan.innerText = "Chargement...";
             statusSpan.className = "status-wait";
@@ -259,13 +266,11 @@
                     return response.text();
                 })
                 .then(text => {
-                    // Parsing du TSV (Tab Separated Values)
                     const lines = text.split('\n');
                     let count = 0;
-                    dictionnaireMots = {}; // Reset
+                    dictionnaireMots = {}; 
 
                     lines.forEach(line => {
-                        // On découpe par tabulation (\t)
                         const parts = line.split('\t');
                         if (parts.length >= 2) {
                             const paire = parts[0].trim().toUpperCase();
@@ -277,19 +282,18 @@
                         }
                     });
                     
-                    statusSpan.innerText = "OK ! (" + count + " mots chargés)";
+                    statusSpan.innerText = "OK ! (" + count + " mots)";
                     statusSpan.className = "status-ok";
                     document.getElementById("infos").innerText = "Prêt ! Appuyez sur Espace";
                 })
                 .catch(err => {
                     console.error(err);
-                    statusSpan.innerText = "Erreur (Vérifiez le lien)";
+                    statusSpan.innerText = "Erreur (Lien ?)";
                     statusSpan.className = "status-err";
                 });
         }
 
-
-        // --- LOGIQUE PRINCIPALE (Inchangée) ---
+        // --- LOGIQUE PRINCIPALE ---
         function actionBarreEspace() {
             const modeVerifActif = document.getElementById("mode-verif").checked;
 
@@ -329,8 +333,29 @@
             zoneMot.classList.remove("visible");
             zoneMot.innerText = "";
             
-            const random = Math.floor(Math.random() * poolDePaires.length);
-            const resultat = poolDePaires[random];
+            let resultat;
+            const cycleActif = document.getElementById("mode-cycle").checked;
+
+            if (cycleActif) {
+                // --- MODE CYCLE ---
+                if (poolRestant.length === 0) {
+                    poolRestant = [...poolDePaires];
+                }
+                
+                // Pioche aléatoire DANS LE RESTE
+                const randomIndex = Math.floor(Math.random() * poolRestant.length);
+                resultat = poolRestant[randomIndex];
+                
+                // On l'enlève de la liste
+                poolRestant.splice(randomIndex, 1);
+                
+                updateDebugCount();
+                
+            } else {
+                // --- MODE HASARD TOTAL ---
+                const random = Math.floor(Math.random() * poolDePaires.length);
+                resultat = poolDePaires[random];
+            }
             
             paireActuelle = resultat;
             document.getElementById("affichage").innerText = resultat;
@@ -341,6 +366,20 @@
             afficherHistorique();
 
             etatVerification = 'ATTENTE_LETTRE';
+        }
+
+        function updateDebugCount() {
+            const cycleActif = document.getElementById("mode-cycle").checked;
+            if (cycleActif) {
+                document.getElementById('debug').innerText = poolRestant.length + " / " + poolDePaires.length;
+            } else {
+                document.getElementById('debug').innerText = poolDePaires.length + " paires";
+            }
+        }
+
+        function resetCycle() {
+            poolRestant = [...poolDePaires];
+            updateDebugCount();
         }
 
         function afficherHistorique() {
@@ -410,7 +449,8 @@
                 }
             }
             poolDePaires = tempPool;
-            document.getElementById('debug').innerText = poolDePaires.length + " paires";
+            // Quand on recalcule le pool global, on reset aussi le Cycle
+            resetCycle(); 
         }
 
         // --- GESTION METRONOME ---
