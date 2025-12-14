@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Trainer Blindfold V6 - Flashcards</title>
+    <title>Trainer Blindfold V8 - Google Sheets</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -20,7 +20,7 @@
         #top-bar {
             background: #333;
             width: 100%;
-            padding: 15px 0;
+            padding: 10px 0;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -31,20 +31,22 @@
         .row {
             display: flex;
             gap: 15px;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
             align-items: center;
             flex-wrap: wrap;
             justify-content: center;
+            width: 95%;
         }
 
         button.btn-mode {
-            padding: 8px 20px;
+            padding: 6px 15px;
             border: none;
             border-radius: 4px;
             cursor: pointer;
             font-weight: bold;
             background-color: #555;
             color: #ccc;
+            font-size: 14px;
         }
         button.btn-mode.active {
             background-color: #3498db;
@@ -52,7 +54,7 @@
             box-shadow: 0 0 10px #3498db;
         }
 
-        input[type="text"] {
+        input[type="text"], select {
             background: #444;
             border: 1px solid #666;
             color: white;
@@ -60,30 +62,43 @@
             border-radius: 4px;
             text-align: center;
             font-family: monospace;
+            font-size: 13px;
         }
         
-        #config-groupes { width: 300px; text-align: left; }
-        #filtre { width: 40px; border-color: #e74c3c; }
+        /* Champ URL Google Sheet */
+        #input-url-sheet {
+            width: 250px;
+            text-align: left;
+            background: #2c3e50;
+            border-color: #3498db;
+            color: #bdc3c7;
+        }
 
-        /* --- OPTIONS (Vérif / Auto) --- */
+        #config-groupes { width: 200px; text-align: left; }
+        #filtre { width: 30px; border-color: #e74c3c; font-weight: bold; }
+
+        /* --- STATUS CONNEXION --- */
+        #status-sheet {
+            font-size: 11px;
+            margin-left: 10px;
+            font-weight: bold;
+        }
+        .status-ok { color: #2ecc71; }
+        .status-err { color: #e74c3c; }
+        .status-wait { color: #f1c40f; }
+
+        /* --- OPTIONS --- */
         .options-area {
             background: rgba(0,0,0,0.2);
             padding: 5px 15px;
             border-radius: 20px;
             display: flex;
-            gap: 15px;
+            gap: 10px;
             align-items: center;
-            font-size: 14px;
+            font-size: 13px;
         }
         
-        /* Checkbox plus grosse */
-        input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-            accent-color: #f1c40f;
-        }
-        
+        input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: #f1c40f; }
         label { cursor: pointer; font-weight: bold; }
 
         /* --- ZONE CENTRALE --- */
@@ -98,7 +113,7 @@
         }
 
         #affichage {
-            font-size: 200px;
+            font-size: 180px;
             font-weight: 800;
             text-shadow: 0 0 20px rgba(255,255,255,0.1);
             user-select: none;
@@ -106,16 +121,16 @@
             margin-bottom: 10px;
         }
 
-        /* Le mot solution */
         #affichage-mot {
-            font-size: 50px;
-            color: #f1c40f; /* Jaune */
+            font-size: 40px;
+            color: #f1c40f; 
             font-weight: bold;
-            height: 60px;
+            height: 50px;
             text-align: center;
             font-family: 'Courier New', monospace;
-            opacity: 0; /* Caché par défaut */
+            opacity: 0; 
             transition: opacity 0.1s;
+            padding: 0 20px;
         }
         
         #affichage-mot.visible { opacity: 1; }
@@ -124,7 +139,7 @@
 
         /* --- HISTORIQUE --- */
         #historique-container {
-            height: 60px;
+            height: 50px;
             width: 100%;
             background: #1a1a1a;
             display: flex;
@@ -134,7 +149,7 @@
             border-top: 1px solid #333;
             color: #555;
             font-family: monospace;
-            font-size: 20px;
+            font-size: 18px;
         }
         .hist-item { animation: fadeIn 0.3s ease; }
         .hist-item:first-child { color: #888; font-weight: bold; }
@@ -146,16 +161,31 @@
 
     <div id="top-bar">
         <div class="row">
+            <input type="text" id="input-url-sheet" placeholder="Coller le lien Google Sheet (TSV)..." onchange="chargerDictionnaireDepuisGoogle()">
+            <span id="status-sheet" class="status-wait">En attente du lien...</span>
+        </div>
+
+        <div class="row">
             <button id="btn-arretes" class="btn-mode active" onclick="changerMode('arretes')">ARRÊTES</button>
             <button id="btn-coins" class="btn-mode" onclick="changerMode('coins')">COINS</button>
+            
             <input type="text" id="config-groupes" placeholder="Groupes..." oninput="sauvegarderEtMettreAJour()">
-            <input type="text" id="filtre" maxlength="1" placeholder="-" oninput="sauvegarderEtMettreAJour()" title="Lettre imposée">
+            
+            <div style="display: flex; gap: 5px; align-items: center; background: #222; padding: 3px; border-radius: 4px; border: 1px solid #555;">
+                <span style="font-size: 12px; color: #aaa; padding-left: 5px;">Imp:</span>
+                <input type="text" id="filtre" maxlength="1" placeholder="-" oninput="sauvegarderEtMettreAJour()">
+                <select id="filtre-pos" onchange="sauvegarderEtMettreAJour()">
+                    <option value="any">*</option>
+                    <option value="1">1ère</option>
+                    <option value="2">2ème</option>
+                </select>
+            </div>
         </div>
 
         <div class="row">
             <div class="options-area">
                 <input type="checkbox" id="mode-verif" checked> 
-                <label for="mode-verif" title="Espace 1 : Affiche le mot / Espace 2 : Change la lettre">Mode Vérif (Flashcard)</label>
+                <label for="mode-verif">Flashcard</label>
                 
                 <span style="border-left: 1px solid #666; height: 20px; margin: 0 5px;"></span>
 
@@ -171,7 +201,7 @@
     <div id="zone-centrale" onclick="document.body.focus()">
         <div id="affichage">GO</div>
         <div id="affichage-mot"></div>
-        <div id="infos">Espace pour commencer</div>
+        <div id="infos">Collez votre lien Google Sheet en haut</div>
     </div>
 
     <div id="historique-container">
@@ -179,56 +209,9 @@
     </div>
 
     <script>
-        // --- DICTIONNAIRE COMPLET ---
-        const dictionnaireMots = {
-            // COLONNE A
-            "AB": "AB test / Abeille", "AC": "Accès / ACDC", "AD": "AD Laurent", "AE": "Aéroport", "AF": "AFS / Affronter", "AG": "Assemblée Générale", "AH": "Ah ! (Denis)", "AI": "Ail / Haïti", "AJ": "Ajouter", "AK": "Haka", "AL": "Aliexpress", "AM": "Amérique", "AN": "Âne / Anniversaire", "AO": "Août / Apo", "AP": "Apéritif", "AQ": "Accu", "AR": "Alliance Raimbow / Arrivée", "AS": "As", "AT": "Atterrissage / Athée", "AU": "Australie", "AV": "AV (César) / Avenir / Ava Mind",
-            // COLONNE B
-            "BA": "Babar", "BC": "Bac", "BD": "BD", "BE": "Beuh / Belgique", "BF": "Battlefield / Best Friend", "BG": "Beau gosse / Bagel", "BH": "Biche / Bitch / Bouche", "BI": "Bi / Bic", "BJ": "Bonjour / Benjamin / Bijou", "BK": "Burger king", "BL": "Balle", "BM": "BMW", "BN": "BN", "BO": "BO / Boo", "BP": "Bip", "BQ": "Bec", "BR": "BR / Bière", "BS": "Team BS / Bisou", "BT": "Bite", "BU": "BU / Bus", "BV": "Bave",
-            // COLONNE C
-            "CA": "Caca", "CB": "CB / Cable", "CD": "Cadeau", "CE": "Célia / CE / Cigarette", "CF": "Cyoubx's friends / Café", "CG": "CGT / Cogolin", "CH": "Chut / Chien", "CI": "CIA", "CJ": "Cage", "CK": "Cookie / Calvin Klein", "CL": "Colle / Clara", "CM": "CM / Camion", "CN": "Conne / Canard", "CO": "Coco", "CP": "CP / Copain", "CQ": "Coq", "CR": "Chris / Compte Rendu", "CS": "CS", "CT": "Cubing time / Couteau", "CU": "Cul", "CV": "CV",
-            // COLONNE D
-            "DA": "David", "DB": "Dab", "DC": "DC Comics / Draco", "DE": "Deux", "DF": "Dracaufeu", "DG": "Deagle / Dragon", "DH": "Dash / Douche", "DI": "Didier / Didi Kong", "DJ": "DJ", "DK": "Donkey Kong / Déca", "DL": "Delphine / Dracolosse", "DM": "DM / Diamant", "DN": "Donner / Daniel / Donnut", "DO": "Déodorant / Dodo", "DP": "Double Pénétration", "DQ": "Deck", "DR": "Drone", "DS": "DS", "DT": "Date", "DU": "Doudou / DUT / Ducobu", "DV": "DVD",
-            // COLONNE E
-            "EA": "EA", "EB": "Ebène / EB", "EC": "Echo / Eclypsia", "ED": "ED Sheeran", "EF": "Effy", "EG": "EG / Eglise", "EH": "Echecs", "EI": "Hélicoptère", "EJ": "Ejaculer", "EK": "Ecailles", "EL": "Aile", "EM": "Eminem", "EN": "Ennui", "EO": "Eolienne", "EP": "EP / Epée", "EQ": "Enculer", "ER": "ER / Erno Rubik's", "ES": "Espagne", "ET": "E.T.", "EU": "Europe", "EV": "Evolution / Evoli",
-            // COLONNE F
-            "FA": "Fanny / FAC", "FB": "Facebook", "FC": "FC Barcelone", "FD": "Fondu", "FE": "Feu", "FG": "Frog", "FH": "Fiche", "FI": "φ (Phi)", "FJ": "Fidji", "FK": "Fuck", "FL": "Tour Eiffel", "FM": "Femme", "FN": "FN", "FO": "Faux", "FP": "Frapper", "FQ": "Phoque", "FR": "France", "FS": "Fesse", "FT": "Foot", "FU": "Fou", "FV": "Favori",
-            // COLONNE G
-            "GA": "Gars / Lady Gaga", "GB": "Gaby", "GC": "Gauche / Gâcher", "GD": "Gad Elmaleh", "GE": "GEII", "GF": "Gaufre / Gaffe", "GH": "Gauche", "GI": "Gui", "GJ": "GJ", "GK": "Geek", "GL": "Good Luck", "GM": "Gomme", "GN": "Génie / GND", "GO": "Géographie", "GP": "GP", "GQ": "Grecque", "GR": "Grand", "GS": "GRS", "GT": "GTA", "GU": "Gulli", "GV": "Gaver / Gervais",
-            // COLONNE H
-            "HA": "Chat", "HB": "Hub / Hibou", "HC": "Hache", "HD": "HD", "HE": "Hélène Ségara", "HF": "HF", "HG": "Charger", "HI": "Chier", "HJ": "Aujourd'hui", "HK": "Hack / Hong-Kong", "HL": "HLM", "HM": "H&M", "HN": "Haine", "HO": "Chaud", "HP": "HP", "HQ": "Choque", "HR": "Héro", "HS": "HS", "HT": "Acheter", "HU": "hachurer", "HV": "Cheveux",
-            // COLONNE I
-            "IA": "IA", "IB": "Ebay", "IC": "Incassable / Inceste", "ID": "Identifiant", "IE": "yeux", "IF": "Infernal / Hi-Fi", "IG": "Yu-Gi-Oh", "IH": "Inch", "IJ": "Gilly", "IK": "Ikar", "IL": "Île", "IM": "Imaginer", "IN": "In (dans)", "IO": "Yo!", "IP": "Iphone / IP", "IQ": "IQ", "IR": "IR", "IS": "Histoire", "IT": "Italie", "IU": "IUT", "IV": "IVG / Inviter",
-            // COLONNE J
-            "JA": "Jazz", "JB": "Job", "JC": "JCVD", "JD": "Le grand JD", "JE": "Jeux", "JF": "JFK", "JG": "Jogging", "JH": "Josh", "JI": "Kiwi", "JK": "Jack", "JL": "Jules", "JM": "Jean-Manuel", "JN": "Johnny Hallyday", "JO": "Jaune / J.O.", "JP": "JPP / Japon", "JQ": "Joconde", "JR": "Junior", "JS": "Jésus", "JT": "JT", "JU": "Jus", "JV": "Jeu Vidéo",
-            // COLONNE K
-            "KA": "Kayak", "KB": "Câble / Kobe", "KC": "Casser", "KD": "Cadet / Cadeau", "KE": "Kebab / Kéké", "KF": "Café", "KG": "Caguer", "KH": "Cash", "KI": "Lit", "KJ": "Kanji", "KL": "Kilian / Kill", "KM": "Karma / Camille", "KN": "Canon", "KO": "K.O.", "KP": "Kappa", "KQ": "Kick", "KR": "Kart", "KS": "Caisse", "KT": "Ketchup", "KU": "Ku klux klan", "KV": "Kevin",
-            // COLONNE L
-            "LA": "Lama", "LB": "Lube", "LC": "Luc", "LD": "Lucas Déglise", "LE": "Lefa Leff", "LF": "Leul", "LG": "LG", "LH": "Lécher / Lacher", "LI": "Mimie mathy", "LJ": "Luge", "LK": "Link", "LM": "Lame", "LN": "Lune", "LO": "LOL", "LP": "Lapin", "LQ": "Lac", "LR": "Laurence", "LS": "Laisse", "LT": "Lutin", "LU": "Lu", "LV": "Lave",
-            // COLONNE M
-            "MA": "Maman", "MB": "My bad / Mob", "MC": "MC", "MD": "Mode", "ME": "Meule", "MF": "Meuf", "MG": "magazine", "MH": "Moche", "MI": "Nie", "MJ": "Mickael Jackson", "MK": "Mickey", "ML": "Mâle", "MN": "Manu", "MO": "Mot", "MP": "Map / MP", "MQ": "Moquer / Moquette", "MR": "Mario / Mister", "MS": "Miss / Message", "MT": "Menthe / Mathieu", "MU": "Mew", "MV": "Mauve",
-            // COLONNE N
-            "NA": "Super Nanas", "NB": "Noob", "NC": "Nicolas", "ND": "Nadal / Nude", "NE": "noeud", "NF": "Neuf", "NG": "Nagui", "NH": "Niche", "NI": "Oie", "NJ": "Nager", "NK": "Nike", "NL": "Nul / Nil", "NM": "Nems", "NO": "Nono le petit robot", "NP": "Nappe", "NQ": "Niquer", "NR": "NR", "NS": "NS", "NT": "NT / Nature", "NU": "Nu", "NV": "Navet",
-            // COLONNE O
-            "OA": "Ola", "OB": "Obi-wan", "OC": "Océane", "OD": "Au DD", "OE": "Oeuf", "OF": "Olaf", "OG": "Ogre", "OH": "Hochet", "OI": "Pi", "OJ": "OG", "OK": "OK", "OL": "OL", "OM": "OM", "ON": "Oignon", "OP": "Opération", "OQ": "Occupé", "OR": "OR", "OS": "Os", "OT": "Hôtel", "OU": "Thibaud Ou", "OV": "Ovni",
-            // COLONNE P
-            "PA": "Papa", "PB": "PB", "PC": "PC", "PD": "PD", "PE": "Pet", "PF": "Paf le chien", "PG": "Page", "PH": "PH", "PI": "QI", "PJ": "PJ / pièce jointe", "PK": "Pokémon / Pourquoi", "PL": "Pelle", "PM": "PM", "PN": "Pneu", "PO": "Po", "PQ": "PQ", "PR": "Paris", "PS": "PS", "PT": "Péter / Potter", "PU": "Pue", "PV": "PV",
-            // COLONNE Q
-            "QA": "Quad", "QB": "Cube", "QC": "QC35", "QD": "Quidditch", "QE": "Queue", "QF": "Keufs", "QG": "QG", "QH": "Quiche", "QI": "Rire", "QJ": "QJ", "QK": "Quick", "QL": "Culotte", "QM": "Cumin", "QN": "Quenouille", "QO": "Quota", "QP": "Cup", "QR": "Requin", "QS": "Question", "QT": "Quête", "QU": "Queue", "QV": "Cuve",
-            // COLONNE R
-            "RA": "Rat", "RB": "Rebeu / Rab", "RC": "Raclette", "RD": "Radio", "RE": "Raie", "RF": "Réf", "RG": "Hergé", "RH": "Riche", "RI": "Six / Scie", "RJ": "Rejet / RJ45", "RK": "Raquette", "RL": "Rocket League", "RM": "Rome", "RN": "RN", "RO": "Rot", "RP": "RP / Rap", "RQ": "Squeezie", "RS": "Ressource", "RT": "Retweet", "RU": "Rue", "RV": "Hervé / Rêve",
-            // COLONNE S
-            "SA": "Salope", "SB": "Sabotage / Sabots", "SC": "Sac", "SD": "Carte SD", "SE": "Sexe", "SF": "Safran", "SG": "Sauge / Société Générale", "SH": "Sacha", "SI": "Titi", "SJ": "Soja", "SK": "Ski", "SL": "Aisselle", "SM": "Sado-maso", "SN": "Sune / Sauna", "SO": "Saucisse / Seau", "SP": "Sans-plomb / Sperme", "SQ": "Seringue", "SR": "Serpent", "ST": "Saturne", "SU": "Sucer", "SV": "Sauver",
-            // COLONNE T
-            "TA": "Théa", "TB": "Très bien / Table", "TC": "The Cubicle", "TD": "TD / Toad", "TE": "Tête", "TF": "Trophé / Taf", "TG": "TG / Tigre", "TH": "Tâche", "TI": "Oui / Huile", "TJ": "Tige", "TK": "Tiktok", "TL": "Toulon / Tal", "TM": "Trackmania", "TN": "TN", "TO": "Toto", "TP": "Téléporter", "TQ": "Tiques", "TR": "Terrain / Terre", "TS": "TS / Tasse", "TU": "Tuer / Tutu", "TV": "TV",
-            // COLONNE U
-            "UA": "Uranium", "UB": "Ubisoft", "UC": "Ucar", "UD": "Rude", "UE": "Union Européenne", "UF": "Oeuf", "UG": "Ugg", "UH": "UHC", "UI": "Vie / VIP", "UJ": "Ujine", "UK": "UK", "UL": "Ulysse / ULM", "UM": "Humain", "UN": "Uno", "UO": "Hugo", "UP": "Uppercut", "UQ": "Uniqlo", "UR": "Urus", "US": "USA", "UT": "Youtube", "UV": "UV",
-            // COLONNE V
-            "VA": "Vase", "VB": "Vibro", "VC": "Victor / WC", "VD": "Vide / Vidéo", "VE": "Véhicule Electrique / Voeux", "VF": "VF", "VG": "Végétarien", "VH": "Vache", "VI": "Vajin", "VJ": "Viking", "VK": "Valorant", "VL": "Vomir", "VM": "Vanne", "VN": "Veau", "VO": "Vapoter", "VP": "Vécu", "VQ": "VR", "VR": "Versus", "VS": "Vitre / Vtt", "VT": "Vu"
-        };
-
-
-        // --- CONFIGURATION ---
+        // --- VARIABLES GLOBALES ---
+        let dictionnaireMots = {}; // Sera rempli par Google Sheet
+        
         let data = {
             arretes: "AB CD EF GH IJ KL MN OP QR ST UV",
             coins:   "ABC DEF GHI JKL MNO PQR STU"
@@ -239,30 +222,83 @@
         let intervalId = null; 
         
         let paireActuelle = "";
-        // Etats possibles : 'ATTENTE_LETTRE' (Affiché la lettre, attend le mot) ou 'ATTENTE_NEXT' (Mot affiché, attend la suite)
         let etatVerification = 'ATTENTE_LETTRE'; 
 
         // --- INIT ---
         window.onload = function() {
             chargerInputs();
             calculerPool();
+            
+            // Charge l'URL sauvegardée si elle existe
+            const savedUrl = localStorage.getItem("sheetUrl");
+            if (savedUrl) {
+                document.getElementById("input-url-sheet").value = savedUrl;
+                chargerDictionnaireDepuisGoogle();
+            }
         };
 
-        // --- FONCTION CENTRALE ---
+        // --- GESTION GOOGLE SHEETS ---
+        function chargerDictionnaireDepuisGoogle() {
+            const url = document.getElementById("input-url-sheet").value.trim();
+            const statusSpan = document.getElementById("status-sheet");
+            
+            if (!url) {
+                statusSpan.innerText = "Aucun lien";
+                statusSpan.className = "status-wait";
+                return;
+            }
+
+            // Sauvegarde l'URL
+            localStorage.setItem("sheetUrl", url);
+            statusSpan.innerText = "Chargement...";
+            statusSpan.className = "status-wait";
+
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) throw new Error("Erreur réseau");
+                    return response.text();
+                })
+                .then(text => {
+                    // Parsing du TSV (Tab Separated Values)
+                    const lines = text.split('\n');
+                    let count = 0;
+                    dictionnaireMots = {}; // Reset
+
+                    lines.forEach(line => {
+                        // On découpe par tabulation (\t)
+                        const parts = line.split('\t');
+                        if (parts.length >= 2) {
+                            const paire = parts[0].trim().toUpperCase();
+                            const mot = parts[1].trim();
+                            if (paire && mot) {
+                                dictionnaireMots[paire] = mot;
+                                count++;
+                            }
+                        }
+                    });
+                    
+                    statusSpan.innerText = "OK ! (" + count + " mots chargés)";
+                    statusSpan.className = "status-ok";
+                    document.getElementById("infos").innerText = "Prêt ! Appuyez sur Espace";
+                })
+                .catch(err => {
+                    console.error(err);
+                    statusSpan.innerText = "Erreur (Vérifiez le lien)";
+                    statusSpan.className = "status-err";
+                });
+        }
+
+
+        // --- LOGIQUE PRINCIPALE (Inchangée) ---
         function actionBarreEspace() {
             const modeVerifActif = document.getElementById("mode-verif").checked;
 
             if (modeVerifActif) {
-                // --- MODE VERIFICATION (2 ETAPES) ---
-                
-                // Si aucune paire n'est encore générée (au démarrage "GO")
                 if (paireActuelle === "") {
                     genererEtAfficherPaire();
                     return;
                 }
-
                 if (etatVerification === 'ATTENTE_LETTRE') {
-                    // L'utilisateur veut voir le mot (Solution)
                     const mot = dictionnaireMots[paireActuelle];
                     const zoneMot = document.getElementById("affichage-mot");
                     
@@ -270,19 +306,15 @@
                         zoneMot.innerText = mot;
                         zoneMot.style.color = "#f1c40f";
                     } else {
-                        zoneMot.innerText = "(Pas de mot enregistré)";
-                        zoneMot.style.color = "#555";
+                        zoneMot.innerText = "(Mot manquant)";
+                        zoneMot.style.color = "#777";
                     }
                     zoneMot.classList.add("visible");
-                    etatVerification = 'ATTENTE_NEXT'; // Prochain appui = Nouvelle paire
-
+                    etatVerification = 'ATTENTE_NEXT'; 
                 } else {
-                    // L'utilisateur a vu le mot, il veut la suite
                     genererEtAfficherPaire();
                 }
-
             } else {
-                // --- MODE STANDARD (V4) ---
                 genererEtAfficherPaire();
             }
         }
@@ -293,12 +325,10 @@
                 return;
             }
 
-            // Reset affichage mot
             const zoneMot = document.getElementById("affichage-mot");
             zoneMot.classList.remove("visible");
             zoneMot.innerText = "";
             
-            // Génération
             const random = Math.floor(Math.random() * poolDePaires.length);
             const resultat = poolDePaires[random];
             
@@ -306,12 +336,10 @@
             document.getElementById("affichage").innerText = resultat;
             document.getElementById("infos").innerText = ""; 
 
-            // Historique
             historique.unshift(resultat);
             if (historique.length > 10) historique.pop();
             afficherHistorique();
 
-            // Reset de l'état pour la vérif
             etatVerification = 'ATTENTE_LETTRE';
         }
 
@@ -333,7 +361,6 @@
             paireActuelle = "";
             afficherHistorique();
             
-            // Reset visuel
             document.getElementById('affichage-mot').classList.remove("visible");
             document.getElementById('btn-arretes').className = mode === 'arretes' ? 'btn-mode active' : 'btn-mode';
             document.getElementById('btn-coins').className = mode === 'coins' ? 'btn-mode active' : 'btn-mode';
@@ -355,6 +382,8 @@
         function calculerPool() {
             const rawText = data[modeActuel];
             const filtre = document.getElementById('filtre').value.toUpperCase();
+            const positionFiltre = document.getElementById('filtre-pos').value;
+
             const groupes = rawText.split(" ").filter(x => x.length > 0);
             const toutesLettres = groupes.join("").split("");
             
@@ -371,7 +400,11 @@
                     let g2 = groupes.find(g => g.includes(L2));
                     if (g1 === g2) continue;
 
-                    if (filtre && (L1 !== filtre && L2 !== filtre)) continue;
+                    if (filtre) {
+                        if (positionFiltre === '1' && L1 !== filtre) continue;
+                        if (positionFiltre === '2' && L2 !== filtre) continue;
+                        if (positionFiltre === 'any' && (L1 !== filtre && L2 !== filtre)) continue;
+                    }
 
                     tempPool.push(L1 + L2);
                 }
@@ -383,12 +416,10 @@
         // --- GESTION METRONOME ---
         function toggleAuto() {
             const isAuto = document.getElementById('auto-mode').checked;
-            
-            // Si on active l'auto, on désactive le mode vérif pour éviter les conflits
             if (isAuto) {
                 document.getElementById('mode-verif').checked = false;
                 lancerMetronome();
-                document.getElementById("infos").innerText = "Mode Automatique actif";
+                document.getElementById("infos").innerText = "Mode Auto";
             } else {
                 clearInterval(intervalId);
                 document.getElementById("infos").innerText = "Mode Manuel";
@@ -398,7 +429,6 @@
         function lancerMetronome() {
             clearInterval(intervalId);
             const ms = document.getElementById('speed').value;
-            // En mode auto, on appelle directement la génération (comme en V4)
             intervalId = setInterval(genererEtAfficherPaire, ms);
         }
 
@@ -415,14 +445,10 @@
             if (document.activeElement.tagName === "INPUT") return;
 
             if (e.code === "Space" || e.keyCode === 32) {
-                
-                // Si le métronome est actif, Espace = Pause
                 if (document.getElementById('auto-mode').checked) {
                     document.getElementById('auto-mode').click(); 
                     return;
                 }
-
-                // Sinon, action standard
                 actionBarreEspace();
             }
         };
